@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XAUUSD Tracker Semplice</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body { background:#070b14; color:#e5e7eb; font-family: Inter, system-ui, sans-serif; }
+    .card { background: rgba(17,24,39,.72); border:1px solid rgba(255,255,255,.07); backdrop-filter: blur(10px); }
+    .input { background:#0f172a; border:1px solid rgba(255,255,255,.08); color:#e5e7eb; }
+    .input:focus { outline:none; border-color:#8b5cf6; box-shadow:0 0 0 3px rgba(139,92,246,.15); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .good { color:#34d399; }
+    .bad { color:#f87171; }
+    .muted { color:#94a3b8; }
+    table th, table td { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-violet-400">XAUUSD Tracker Semplice</h1>
+        <p class="text-sm text-slate-400">Inserisci solo il risultato del trade e il sistema aggiorna tutto in automatico.</p>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button id="exportBtn" class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold">Esporta CSV</button>
+        <button id="resetBtn" class="px-4 py-2 rounded-xl bg-red-600/80 hover:bg-red-500 text-white text-sm font-semibold">Reset</button>
+      </div>
+    </header>
+
+    <section class="card rounded-2xl p-5">
+      <h2 class="text-sm font-semibold text-slate-300 mb-4">Nuovo trade</h2>
+      <form id="tradeForm" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Data</label>
+          <input id="date" type="date" class="input rounded-xl px-3 py-2 w-full text-sm" required />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Ora</label>
+          <input id="time" type="time" class="input rounded-xl px-3 py-2 w-full text-sm" required />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Broker</label>
+          <select id="broker" class="input rounded-xl px-3 py-2 w-full text-sm">
+            <option>Eightcap</option>
+            <option>Vt Markets</option>
+            <option>HYDRA</option>
+            <option>Vittaverse</option>
+            <option>IC Markets</option>
+            <option>FP Markets</option>
+            <option>Altro</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Direzione</label>
+          <select id="direction" class="input rounded-xl px-3 py-2 w-full text-sm">
+            <option value="long">Long</option>
+            <option value="short">Short</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Slot</label>
+          <select id="slot" class="input rounded-xl px-3 py-2 w-full text-sm">
+            <option value="Manuale">Manuale</option>
+            <option value="Slot 1">Slot 1</option>
+            <option value="Slot 2">Slot 2</option>
+            <option value="Slot 3">Slot 3</option>
+            <option value="Slot 4">Slot 4</option>
+            <option value="Extra">Extra</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">PL netto</label>
+          <input id="pl" type="number" step="0.01" class="input rounded-xl px-3 py-2 w-full text-sm mono" placeholder="es. 25.50 o -12.00" required />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">RR (opzionale)</label>
+          <input id="rr" type="number" step="0.01" class="input rounded-xl px-3 py-2 w-full text-sm mono" placeholder="es. 1.80" />
+        </div>
+        <div class="md:col-span-2 xl:col-span-1">
+          <label class="block text-xs text-slate-400 mb-1">Note</label>
+          <input id="notes" type="text" class="input rounded-xl px-3 py-2 w-full text-sm" placeholder="Setup, motivo entrata, osservazioni" />
+        </div>
+        <div class="flex items-end">
+          <button class="w-full px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm">Salva trade</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="grid grid-cols-2 lg:grid-cols-6 gap-4" id="kpis"></section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <div class="card rounded-2xl p-5">
+        <h2 class="text-sm font-semibold text-slate-300 mb-4">Equity</h2>
+        <div class="h-72"><canvas id="equityChart"></canvas></div>
+      </div>
+      <div class="card rounded-2xl p-5">
+        <h2 class="text-sm font-semibold text-slate-300 mb-4">P/L giornaliero</h2>
+        <div class="h-72"><canvas id="dailyChart"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+      <div class="card rounded-2xl p-5 overflow-x-auto">
+        <h2 class="text-sm font-semibold text-slate-300 mb-4">Broker</h2>
+        <table class="w-full text-sm">
+          <thead class="text-slate-400">
+            <tr>
+              <th class="text-left py-2">Broker</th>
+              <th class="text-right py-2">Trade</th>
+              <th class="text-right py-2">Win Rate</th>
+              <th class="text-right py-2">Net P/L</th>
+            </tr>
+          </thead>
+          <tbody id="brokerTable"></tbody>
+        </table>
+      </div>
+      <div class="card rounded-2xl p-5 overflow-x-auto">
+        <h2 class="text-sm font-semibold text-slate-300 mb-4">Slot</h2>
+        <table class="w-full text-sm">
+          <thead class="text-slate-400">
+            <tr>
+              <th class="text-left py-2">Slot</th>
+              <th class="text-right py-2">Trade</th>
+              <th class="text-right py-2">Win Rate</th>
+              <th class="text-right py-2">Net P/L</th>
+            </tr>
+          </thead>
+          <tbody id="slotTable"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card rounded-2xl p-5 overflow-x-auto">
+      <div class="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <h2 class="text-sm font-semibold text-slate-300">Storico trade</h2>
+        <div class="text-xs text-slate-400">Tutto aggiornato automaticamente</div>
+      </div>
+      <table class="w-full text-sm">
+        <thead class="text-slate-400 border-b border-white/10">
+          <tr>
+            <th class="text-left py-3 pr-4">Data</th>
+            <th class="text-left py-3 pr-4">Ora</th>
+            <th class="text-left py-3 pr-4">Broker</th>
+            <th class="text-left py-3 pr-4">Dir</th>
+            <th class="text-left py-3 pr-4">Slot</th>
+            <th class="text-right py-3 pr-4">PL netto</th>
+            <th class="text-right py-3 pr-4">RR</th>
+            <th class="text-left py-3 pr-4">Esito</th>
+            <th class="text-left py-3 pr-4">Note</th>
+            <th class="text-right py-3">Az.</th>
+          </tr>
+        </thead>
+        <tbody id="historyTable"></tbody>
+      </table>
+    </section>
+  </div>
+
+<script>
+const STORAGE_KEY = 'xauusd-tracker-simple-v1';
+let equityChart, dailyChart;
+
+const euro = n => new Intl.NumberFormat('it-IT', { style:'currency', currency:'USD', minimumFractionDigits:2 }).format(Number(n || 0));
+const pct = n => `${Number(n || 0).toFixed(1)}%`;
+const today = () => new Date().toISOString().slice(0,10);
+
+function getTrades(){
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+function saveTrades(trades){ localStorage.setItem(STORAGE_KEY, JSON.stringify(trades)); }
+
+function calcTrade(data){
+  const pl = Number(data.pl || 0);
+  const rr = data.rr === '' ? null : Number(data.rr);
+  const result = pl > 0 ? 'WIN' : pl < 0 ? 'LOSS' : 'BE';
+
+  return {
+    ...data,
+    pl,
+    net: pl,
+    rr,
+    result,
+    timestamp: `${data.date}T${data.time}`,
+    id: data.id || `${Date.now()}-${Math.random().toString(36).slice(2,8)}`
+  };
+}
+
+function aggregate(trades){
+  const totalTrades = trades.length;
+  const wins = trades.filter(t => t.result === 'WIN').length;
+  const losses = trades.filter(t => t.result === 'LOSS').length;
+  const be = trades.filter(t => t.result === 'BE').length;
+  const net = trades.reduce((a,b)=>a+b.net,0);
+  const avgNet = totalTrades ? net / totalTrades : 0;
+  const rrTrades = trades.filter(t => t.rr !== null && !Number.isNaN(t.rr));
+  const avgRR = rrTrades.length ? rrTrades.reduce((a,b)=>a+b.rr,0) / rrTrades.length : 0;
+  return { totalTrades, wins, losses, be, net, avgNet, avgRR, winRate: totalTrades ? wins/totalTrades*100 : 0 };
+}
+
+function groupBy(trades, key){
+  const map = {};
+  trades.forEach(t => {
+    const k = t[key] || 'N/D';
+    if (!map[k]) map[k] = [];
+    map[k].push(t);
+  });
+  return Object.entries(map).map(([label, items]) => {
+    const s = aggregate(items);
+    return { label, ...s };
+  }).sort((a,b)=>b.net-a.net);
+}
+
+function buildKpis(trades){
+  const s = aggregate(trades);
+  const byDay = {};
+  trades.forEach(t => byDay[t.date] = (byDay[t.date] || 0) + t.net);
+  const days = Object.keys(byDay).sort();
+  const todayNet = days.length ? byDay[days[days.length - 1]] : 0;
+  const kpis = [
+    ['Trade', s.totalTrades, 'text-slate-200'],
+    ['Win Rate', pct(s.winRate), 'text-violet-400'],
+    ['Net P/L', euro(s.net), s.net >= 0 ? 'good' : 'bad'],
+    ['Media trade', euro(s.avgNet), s.avgNet >= 0 ? 'good' : 'bad'],
+    ['Oggi', euro(todayNet), todayNet >= 0 ? 'good' : 'bad'],
+    ['RR medio', s.avgRR ? s.avgRR.toFixed(2) : '--', 'text-cyan-400']
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(([l,v,c]) => `
+    <div class="card rounded-2xl p-4">
+      <div class="text-xs text-slate-400 mb-1">${l}</div>
+      <div class="text-xl font-bold mono ${c}">${v}</div>
+    </div>`).join('');
+}
+
+function buildTables(trades){
+  const brokerRows = groupBy(trades, 'broker');
+  const slotRows = groupBy(trades, 'slot');
+  document.getElementById('brokerTable').innerHTML = brokerRows.length ? brokerRows.map(r => `
+    <tr class="border-t border-white/5">
+      <td class="py-2 pr-3">${r.label}</td>
+      <td class="py-2 pr-3 text-right mono">${r.totalTrades}</td>
+      <td class="py-2 pr-3 text-right mono">${pct(r.winRate)}</td>
+      <td class="py-2 text-right mono ${r.net >= 0 ? 'good' : 'bad'}">${euro(r.net)}</td>
+    </tr>`).join('') : '<tr><td colspan="4" class="py-3 text-slate-500">Nessun dato</td></tr>';
+  document.getElementById('slotTable').innerHTML = slotRows.length ? slotRows.map(r => `
+    <tr class="border-t border-white/5">
+      <td class="py-2 pr-3">${r.label}</td>
+      <td class="py-2 pr-3 text-right mono">${r.totalTrades}</td>
+      <td class="py-2 pr-3 text-right mono">${pct(r.winRate)}</td>
+      <td class="py-2 text-right mono ${r.net >= 0 ? 'good' : 'bad'}">${euro(r.net)}</td>
+    </tr>`).join('') : '<tr><td colspan="4" class="py-3 text-slate-500">Nessun dato</td></tr>';
+}
+
+function buildHistory(trades){
+  const rows = [...trades].sort((a,b)=> b.timestamp.localeCompare(a.timestamp));
+  document.getElementById('historyTable').innerHTML = rows.length ? rows.map(t => `
+    <tr class="border-t border-white/5">
+      <td class="py-3 pr-4">${t.date}</td>
+      <td class="py-3 pr-4 mono">${t.time}</td>
+      <td class="py-3 pr-4">${t.broker}</td>
+      <td class="py-3 pr-4">${t.direction === 'long' ? 'LONG' : 'SHORT'}</td>
+      <td class="py-3 pr-4">${t.slot}</td>
+      <td class="py-3 pr-4 text-right mono ${t.net >= 0 ? 'good':'bad'}">${euro(t.net)}</td>
+      <td class="py-3 pr-4 text-right mono">${t.rr ? t.rr.toFixed(2) : '--'}</td>
+      <td class="py-3 pr-4 ${t.result === 'WIN' ? 'good' : t.result === 'LOSS' ? 'bad' : 'text-slate-400'}">${t.result}</td>
+      <td class="py-3 pr-4 max-w-48 truncate">${t.notes || '--'}</td>
+      <td class="py-3 text-right"><button onclick="removeTrade('${t.id}')" class="px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20">X</button></td>
+    </tr>`).join('') : '<tr><td colspan="10" class="py-6 text-center text-slate-500">Nessun trade inserito</td></tr>';
+}
+
+function buildCharts(trades){
+  const byDay = {};
+  const equity = [];
+  let cum = 0;
+  [...trades].sort((a,b)=> a.timestamp.localeCompare(b.timestamp)).forEach(t => {
+    byDay[t.date] = (byDay[t.date] || 0) + t.net;
+    cum += t.net;
+    equity.push({ x: `${t.date} ${t.time}`, y: cum });
+  });
+
+  const eqCtx = document.getElementById('equityChart');
+  const dayCtx = document.getElementById('dailyChart');
+  if (equityChart) equityChart.destroy();
+  if (dailyChart) dailyChart.destroy();
+
+  equityChart = new Chart(eqCtx, {
+    type: 'line',
+    data: {
+      labels: equity.map(p => p.x),
+      datasets: [{ data: equity.map(p => p.y), borderColor:'#8b5cf6', backgroundColor:'rgba(139,92,246,.15)', fill:true, tension:.35, pointRadius:3 }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} } }
+  });
+
+  const dayLabels = Object.keys(byDay).sort();
+  dailyChart = new Chart(dayCtx, {
+    type: 'bar',
+    data: {
+      labels: dayLabels,
+      datasets: [{
+        data: dayLabels.map(d => byDay[d]),
+        backgroundColor: dayLabels.map(d => byDay[d] >= 0 ? 'rgba(52,211,153,.5)' : 'rgba(248,113,113,.5)'),
+        borderColor: dayLabels.map(d => byDay[d] >= 0 ? '#34d399' : '#f87171'),
+        borderWidth:1,
+        borderRadius:8
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false} } }
+  });
+}
+
+function render(){
+  const trades = getTrades();
+  buildKpis(trades);
+  buildTables(trades);
+  buildHistory(trades);
+  buildCharts(trades);
+}
+
+function removeTrade(id){
+  const trades = getTrades().filter(t => t.id !== id);
+  saveTrades(trades);
+  render();
+}
+window.removeTrade = removeTrade;
+
+function exportCSV(){
+  const trades = getTrades();
+  if (!trades.length) return alert('Nessun trade da esportare');
+  const headers = ['date','time','broker','direction','slot','pl','net','rr','result','notes'];
+  const rows = trades.map(t => headers.map(h => {
+    const v = t[h] ?? '';
+    return `"${String(v).replaceAll('"','""')}"`;
+  }).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `xauusd-trades-simple-${today()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetAll(){
+  if (!confirm('Vuoi eliminare tutti i trade?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  render();
+}
+
+document.getElementById('tradeForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const data = {
+    date: document.getElementById('date').value,
+    time: document.getElementById('time').value,
+    broker: document.getElementById('broker').value,
+    direction: document.getElementById('direction').value,
+    slot: document.getElementById('slot').value,
+    pl: document.getElementById('pl').value,
+    rr: document.getElementById('rr').value,
+    notes: document.getElementById('notes').value
+  };
+
+  if (!data.date || !data.time) return alert('Inserisci data e ora');
+  const trade = calcTrade(data);
+  const trades = getTrades();
+  trades.push(trade);
+  saveTrades(trades);
+  e.target.reset();
+  document.getElementById('date').value = today();
+  document.getElementById('time').value = new Date().toTimeString().slice(0,5);
+  render();
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+document.getElementById('resetBtn').addEventListener('click', resetAll);
+document.getElementById('date').value = today();
+document.getElementById('time').value = new Date().toTimeString().slice(0,5);
+render();
+</script>
+</body>
+</html>
